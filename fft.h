@@ -13,4 +13,10 @@ void FFT2(complex double in[], complex double out[]);
  */
 void FFT(complex double in[], complex double out[], int size);
 
+
+/**
+ * legacy_FFT() - A legacy fft which performs on O(N^2) complexity
+ */
+void legacy_FFT(complex double in[], complex double out[], int size);
+
 #endif

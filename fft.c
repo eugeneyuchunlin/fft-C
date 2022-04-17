@@ -51,3 +51,17 @@ void FFT(complex double in[], complex double out[], int size)
         }
     }
 }
+
+
+void legacy_FFT(complex double in[], complex double out[], int size)
+{
+    double pi2_div_size = 2 * M_PI / size;
+    for (int k = 0; k < size; ++k) {
+        complex double sum = 0;
+        double angle = pi2_div_size * k;
+        for (int j = 0; j < size; ++j) {
+            sum += in[j] * (cos(angle * j) - I * sin(angle * j));
+        }
+        out[k] = sum;
+    }
+}
