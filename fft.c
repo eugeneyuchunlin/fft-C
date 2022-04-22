@@ -149,14 +149,16 @@ void FFT2N(complex double in[], complex double out[], int size)
 void FFT(complex double in[], complex double out[], int size){
     bool special_flag = false;
     void (*fft_function)(complex double *, complex double *, int) = FFT;
-    if(size == 2){
+    if(size == 1){
+        out[0] = in[0];
+    }else if(size == 2){
         FFT2(in, out);
     }else if (size == 3){
         FFT3(in, out);
     }else if (size == 5){
         FFTN(in, out, 5);
     }else{
-        int p = 0;
+        int p = 1;
         if(size % 2 == 0){
             p = 2;
         }else if (size % 3 == 0){
