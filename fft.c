@@ -47,10 +47,8 @@ typedef void(*fftn_function_t)(complex double *, complex double *, int);
 
 void FFT2(complex double in[], complex double out[]) _FFT2_CONTENT
 void _FFT2(complex double in[], complex double out[], int dum) _FFT2_CONTENT
-
 void FFT3(complex double in[], complex double out[]) _FFT3_CONTENT
 void _FFT3(complex double in[], complex double out[], int dum) _FFT3_CONTENT
-
 
 void FFTN(complex double in[], complex double out[], int N)
 {
@@ -75,88 +73,6 @@ void FFTN(complex double in[], complex double out[], int N)
     }
 }
 
-void FFT3N(complex double in[], complex double out[], int size)
-{
-    if (size == 3) {
-        FFT3(in, out);
-    } else {
-        int next_size = size / 3;
-        complex double n3[next_size];
-        complex double n3_1[next_size];
-        complex double n3_2[next_size];
-
-        complex double out3[next_size];
-        complex double out3_1[next_size];
-        complex double out3_2[next_size];
-
-        for (int i = 0; i < next_size; ++i) {
-            n3[i] = in[3 * i];
-            n3_1[i] = in[3 * i + 1];
-            n3_2[i] = in[3 * i + 2];
-        }
-
-        FFT3N(n3, out3, next_size);
-        FFT3N(n3_1, out3_1, next_size);
-        FFT3N(n3_2, out3_2, next_size);
-
-        complex double in_temp[3];
-        complex double out_temp[3];
-
-        for (int i = 0; i < next_size; ++i) {
-            complex double w1 =
-                cos(i * 2 * M_PI / size) - I * sin(i * 2 * M_PI / size);
-            complex double w2 =
-                cos(i * 4 * M_PI / size) - I * sin(i * 4 * M_PI / size);
-
-            in_temp[0] = out3[i];
-            in_temp[1] = out3_1[i] * w1;
-            in_temp[2] = out3_2[i] * w2;
-
-            FFT3(in_temp, out_temp);
-            out[i] = out_temp[0];
-            out[i + next_size] = out_temp[1];
-            out[i + next_size * 2] = out_temp[2];
-        }
-    }
-}
-
-
-void FFT2N(complex double in[], complex double out[], int size)
-{
-    // in this function I wanna seperate the array to 2 parts
-    // even part and odd part
-    // out = even_part + W_{n}^-k
-
-    if (size == 2) {
-        FFT2(in, out);
-    } else {
-        int half_size = size >> 1;
-        // seperate in to two parts
-        complex double even[half_size];
-        complex double even_result[half_size];
-
-        complex double odd[half_size];
-        complex double odd_result[half_size];
-
-        // place the elements to right place
-        for (int i = 0; i < half_size; ++i) {
-            even[i] = in[2 * i];
-            odd[i] = in[2 * i + 1];
-        }
-
-        // FFT seperately
-        FFT2N(even, even_result, half_size);
-        FFT2N(odd, odd_result, half_size);
-
-
-        for (int i = 0; i < half_size; ++i) {
-            complex double w =
-                cos(i * 2 * M_PI / size) - I * sin(i * 2 * M_PI / size);
-            out[i] = even_result[i] + odd_result[i] * w;
-            out[half_size + i] = even_result[i] + (-1) * odd_result[i] * w;
-        }
-    }
-}
 
 void FFT(complex double in[], complex double out[], int size)
 {
@@ -208,10 +124,6 @@ void FFT(complex double in[], complex double out[], int size)
             }
         }
 
-        // if(p == size)
-        //     fft_function = FFTN;
-        // else fft_function = FFT;
-
         fft_function = (fftn_function_t)((p == size)*(unsigned long)FFTN + 
                     (p != size)*(unsigned long)FFT);
         // invoke FFT
@@ -228,7 +140,6 @@ void FFT(complex double in[], complex double out[], int size)
         fft_function = (fftn_function_t)((p == 2) * (unsigned long)_FFT2 + 
                 (p == 3) * (unsigned long) _FFT3 + 
                 (p != 2 && p != 3) * (unsigned long) FFTN);
-
         for (int i = 0; i < new_size; ++i) {
             for (int j = 0; j < p; ++j) {
                 double degree = i * j * M_PI_MUL_2 / size;
