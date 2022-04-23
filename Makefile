@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -g -O3
+CFLAGS := -O3 
 
 all : example verify
 

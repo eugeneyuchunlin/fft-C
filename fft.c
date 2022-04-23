@@ -10,6 +10,9 @@
 #define SQRT3_DIV_2 0.8660254037844385965883021
 #define M_PI_MUL_2  6.2831853071795862319959269
 
+#define _FFT1_CONTENT { out[0] = in[0];}
+
+
 // In this function I want to perform this operation
 //
 //         +--     --+
@@ -45,15 +48,18 @@
 typedef void(*fftn_function_t)(complex double *, complex double *, int);
 
 
+static inline void FFT1(complex double in[], complex double out[]) _FFT1_CONTENT
+static inline void _FFT1(complex double in[], complex double out[], int dum) _FFT1_CONTENT
+
 void FFT2(complex double in[], complex double out[]) _FFT2_CONTENT
-void _FFT2(complex double in[], complex double out[], int dum) _FFT2_CONTENT
+static inline void _FFT2(complex double in[], complex double out[], int dum) _FFT2_CONTENT
 
 void FFT3(complex double in[], complex double out[]) _FFT3_CONTENT
-void _FFT3(complex double in[], complex double out[], int dum) _FFT3_CONTENT
-
+static inline void _FFT3(complex double in[], complex double out[], int dum) _FFT3_CONTENT
 
 void FFTN(complex double in[], complex double out[], int N)
 {
+    // printf("N = %d\n", N);
     complex double mat[N][N];
     double pi_2_DIV_N = M_PI_MUL_2 / N;
     for (int i = 1; i < N; ++i) {
@@ -212,7 +218,7 @@ void FFT(complex double in[], complex double out[], int size)
         //     fft_function = FFTN;
         // else fft_function = FFT;
 
-        fft_function = (fftn_function_t)((p == size)*(unsigned long)FFTN + 
+        fft_function = (fftn_function_t)((p == size)*(unsigned long)FFT1 + 
                     (p != size)*(unsigned long)FFT);
         // invoke FFT
         for (int i = 0; i < p; ++i) {
