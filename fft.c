@@ -1,10 +1,13 @@
 #include "fft.h"
+#include "queue.h"
+#include "task.h"
 
 #include <complex.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define SQRT3       1.7320508075688771931766041
 #define SQRT3_DIV_2 0.8660254037844385965883021
@@ -45,7 +48,6 @@
         out[1] = in[0] + in[1] * sq3_mi_1_d_2 + in[2] * sq3_ps_1_d_2;      \
         out[2] = in[0] + in[1] * sq3_ps_1_d_2 + in[2] * sq3_mi_1_d_2;      \
     }
-typedef void(*fftn_function_t)(complex double *, complex double *, int);
 
 
 static inline void FFT1(complex double in[], complex double out[]) _FFT1_CONTENT
@@ -81,88 +83,123 @@ void FFTN(complex double in[], complex double out[], int N)
     }
 }
 
-void FFT3N(complex double in[], complex double out[], int size)
+void init_fft_task(complex double in[], complex double out[], int size,
+       fft_task_t * task)
 {
-    if (size == 3) {
-        FFT3(in, out);
+     *task = (fft_task_t){
+        .in = in,
+        .out = out,
+        .size = size,
+        .type = DIVIDE,
+        .entries_out = NULL,
+        .size_of_entries_out = 0
+     };
+}
+
+int determine_p(int size){
+    int p = 1;
+    if (size % 2 == 0) {
+        p = 2;
+    } else if (size % 3 == 0) {
+        p = 3;
     } else {
-        int next_size = size / 3;
-        complex double n3[next_size];
-        complex double n3_1[next_size];
-        complex double n3_2[next_size];
-
-        complex double out3[next_size];
-        complex double out3_1[next_size];
-        complex double out3_2[next_size];
-
-        for (int i = 0; i < next_size; ++i) {
-            n3[i] = in[3 * i];
-            n3_1[i] = in[3 * i + 1];
-            n3_2[i] = in[3 * i + 2];
-        }
-
-        FFT3N(n3, out3, next_size);
-        FFT3N(n3_1, out3_1, next_size);
-        FFT3N(n3_2, out3_2, next_size);
-
-        complex double in_temp[3];
-        complex double out_temp[3];
-
-        for (int i = 0; i < next_size; ++i) {
-            complex double w1 =
-                cos(i * 2 * M_PI / size) - I * sin(i * 2 * M_PI / size);
-            complex double w2 =
-                cos(i * 4 * M_PI / size) - I * sin(i * 4 * M_PI / size);
-
-            in_temp[0] = out3[i];
-            in_temp[1] = out3_1[i] * w1;
-            in_temp[2] = out3_2[i] * w2;
-
-            FFT3(in_temp, out_temp);
-            out[i] = out_temp[0];
-            out[i + next_size] = out_temp[1];
-            out[i + next_size * 2] = out_temp[2];
+        for (int i = 5; i <= size; ++i) {
+            if (size % i == 0) {
+                p = i;
+                break;
+            }
         }
     }
+    return p;
 }
 
 
-void FFT2N(complex double in[], complex double out[], int size)
-{
-    // in this function I wanna seperate the array to 2 parts
-    // even part and odd part
-    // out = even_part + W_{n}^-k
+void FFT_iter(complex double in[], complex double out[], int size){
 
-    if (size == 2) {
-        FFT2(in, out);
-    } else {
-        int half_size = size >> 1;
-        // seperate in to two parts
-        complex double even[half_size];
-        complex double even_result[half_size];
+    complex double *_in = (complex double *)malloc(sizeof(complex double)*size);
+    memcpy(_in, in, sizeof(complex double)*size);
 
-        complex double odd[half_size];
-        complex double odd_result[half_size];
+    task_queue_t queue;
+    init_task_queue(&queue);
+    
+    fft_task_t *t = (fft_task_t*)malloc(sizeof(fft_task_t));
+    init_fft_task(_in, out, size, t);
+    add_task(t, &queue);
+    
+    fftn_function_t fft_function;
 
-        // place the elements to right place
-        for (int i = 0; i < half_size; ++i) {
-            even[i] = in[2 * i];
-            odd[i] = in[2 * i + 1];
+    int p;
+    fft_task_t *nt;
+    while(queue.size > 0){
+        // pop node
+        pop_task(&t, &queue); 
+        if(t->size == 2){
+            FFT2(t->in, t->out);
+            free_task(&t);
+            continue;
+        }else if (t->size == 3){
+            FFT3(t->in, t->out);
+            free_task(&t);
+            continue;
+        }else{
+            p = determine_p(t->size);
+            if(p == t->size){
+                FFTN(t->in, t->out, t->size);
+                free_task(&t);
+                continue;
+            }
         }
+        int new_size = t->size / p;
+        if(t->type == DIVIDE){
+            // reentrant
+            add_task(t, &queue);
+            t->type = MERGE;
+            complex double **entries_out = (complex double **)malloc(sizeof(complex double *) * p);
+            for(int i = 0; i < p; ++i){
+                // divide
+                complex double *entries_in = (complex double *)malloc(sizeof(complex double)*new_size);
+                entries_out[i] = (complex double *)malloc(sizeof(complex double)*new_size);
 
-        // FFT seperately
-        FFT2N(even, even_result, half_size);
-        FFT2N(odd, odd_result, half_size);
+                // place data
+                for(int j = 0; j < new_size; ++j){
+                    entries_in[j] = t->in[j * p + i];
+                }
 
-
-        for (int i = 0; i < half_size; ++i) {
-            complex double w =
-                cos(i * 2 * M_PI / size) - I * sin(i * 2 * M_PI / size);
-            out[i] = even_result[i] + odd_result[i] * w;
-            out[half_size + i] = even_result[i] + (-1) * odd_result[i] * w;
-        }
+                nt = malloc(sizeof(fft_task_t));
+                init_fft_task(entries_in, entries_out[i], new_size, nt);
+                add_task(nt, &queue);
+            }
+            t->entries_out = entries_out;
+            t->size_of_entries_out = p;
+            // printf("List task : \n");
+            // list_task(&queue);
+            // printf("");
+        }else{ // type is MERGE
+            fft_function = (fftn_function_t)((p == 2) * (unsigned long)_FFT2 + 
+                (p == 3) * (unsigned long) _FFT3 + 
+                (p != 2 && p != 3) * (unsigned long) FFTN); 
+            complex double *in_temp =
+                (complex double *) malloc(sizeof(complex double) * p);
+            complex double *out_temp =
+                (complex double *) malloc(sizeof(complex double) * p);
+            for(int i = 0; i < new_size; ++i){
+                for(int j = 0; j < p; ++j){
+                    double degree = i * j * M_PI_MUL_2 / t->size;
+                    complex double w = cos(degree) - I*sin(degree);
+                    in_temp[j] = t->entries_out[j][i] * w;
+                } 
+                fft_function(in_temp, out_temp, p);
+                for(int j = 0; j < p; ++j){
+                    t->out[i + new_size *j] = out_temp[j];
+                }
+            }
+            free(in_temp);
+            free(out_temp);
+            free_task(&t);
+        } 
     }
 }
+
 
 void FFT(complex double in[], complex double out[], int size)
 {
@@ -214,9 +251,6 @@ void FFT(complex double in[], complex double out[], int size)
             }
         }
 
-        // if(p == size)
-        //     fft_function = FFTN;
-        // else fft_function = FFT;
 
         fft_function = (fftn_function_t)((p == size)*(unsigned long)FFT1 + 
                     (p != size)*(unsigned long)FFT);
@@ -234,7 +268,6 @@ void FFT(complex double in[], complex double out[], int size)
         fft_function = (fftn_function_t)((p == 2) * (unsigned long)_FFT2 + 
                 (p == 3) * (unsigned long) _FFT3 + 
                 (p != 2 && p != 3) * (unsigned long) FFTN);
-
         for (int i = 0; i < new_size; ++i) {
             for (int j = 0; j < p; ++j) {
                 double degree = i * j * M_PI_MUL_2 / size;
