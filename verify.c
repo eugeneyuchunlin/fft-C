@@ -24,6 +24,7 @@ void test(int test_size){
     complex double *array = (complex double *)malloc(sizeof(complex double)*test_size);
     complex double *out = (complex double *)malloc(sizeof(complex double)*test_size);
     complex double *out_legacy = (complex double *)malloc(sizeof(complex double)*test_size);
+    complex double *out_iter = (complex double *)malloc(sizeof(complex double)*test_size);
 
    for (int i = 0; i < test_size; ++i) {
         array[i] = i;
@@ -31,12 +32,20 @@ void test(int test_size){
     FFT(array, out, test_size);
     fprintf(stdout, "[FFT]");
     fflush(stdout);
+
     legacy_FFT(array, out_legacy, test_size);
     fprintf(stdout, "[Legacy]");
     fflush(stdout); 
+
+    FFT_iter(array, out_iter, test_size);
+    fprintf(stdout, "[Iter]");
+    fflush(stdout);
     for(int i = 0; i < test_size; ++i){
         assert(fabs(creal(out[i]) - creal(out_legacy[i])) < 0.001);
         assert(fabs(cimag(out[i]) - cimag(out_legacy[i])) < 0.001);
+
+        assert(fabs(creal(out_iter[i]) - creal(out_legacy[i])) < 0.001);
+        assert(fabs(cimag(out_iter[i]) - cimag(out_legacy[i])) < 0.001);
     } 
 
     free(array);
