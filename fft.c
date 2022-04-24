@@ -52,20 +52,7 @@ void _FFT2(complex double in[], complex double out[], int dum) _FFT2_CONTENT
 void FFT3(complex double in[], complex double out[]) _FFT3_CONTENT
 void _FFT3(complex double in[], complex double out[], int dum) _FFT3_CONTENT
 
-void FFTN(complex double in[], complex double out[], int N)
-{
-    complex double mat[N][N];
-    double pi_2_DIV_N = M_PI_MUL_2 / N;
-    for (int i = 1; i < N; ++i) {
-        for (int j = 1; j < N; ++j) {
-            double degree = pi_2_DIV_N * i * j;
-            mat[i][j] = cos(degree) - I*sin(degree); // cexp in slower than cos/sin
-        }
-    }
-    for (int i = 0; i < N; ++i) {
-        mat[0][i] = mat[i][0] = 1;
-    }
-
+void mat_multiplication(complex double in[], complex double out[], complex double **mat, int N){
     for (int i = 0; i < N; ++i) {
         complex double sum = 0;
         for (int j = 0; j < N; ++j) {
@@ -74,6 +61,43 @@ void FFTN(complex double in[], complex double out[], int N)
         out[i] = sum;
     }
 }
+
+complex double **create_mat(int N){
+    complex double *_mat;
+    complex double **mat;
+    _mat = malloc(sizeof(complex double)*N*N);
+    mat = malloc(sizeof(complex double*)*N);
+    
+    for(int i = 0; i < N; ++i){
+        mat[i] = _mat + (i*N);
+    }
+
+    return mat;
+}
+
+static void __init_omega_mat(complex double **mat, int N){
+    double pi_2_DIV_N = M_PI_MUL_2 / N;
+    for (int i = 1; i < N; ++i) {
+        for (int j = 1; j < N; ++j) {
+            double degree = pi_2_DIV_N * i * j;
+            mat[i][j] = cos(degree) - I*sin(degree); // cexp in slower than cos/sin
+        }
+    }
+}
+
+void FFTN(complex double in[], complex double out[], int N)
+{
+    complex double **mat = create_mat(N);
+    __init_omega_mat(mat, N); 
+    for (int i = 0; i < N; ++i) {
+        mat[0][i] = mat[i][0] = 1;
+    }
+    mat_multiplication(in, out, mat, N);
+    free(mat[0]);
+    free(mat);
+}
+
+
 
 void init_fft_task(complex double in[], complex double out[], int size,
        fft_task_t * task)
@@ -105,15 +129,34 @@ int determine_p(int size){
     return p;
 }
 
+int greatest_prime(int number){
+    int p = 2;
+    while(p <= number){
+        if(number % p == 0){
+            number /= p;
+        }else{
+            ++p;
+        }
+    }
+    return p;
+}
+
 
 void FFT_iter(complex double in[], complex double out[], int size){
+
+    // find the greatest prime
+    int gp = greatest_prime(size); 
+    complex double **mat = create_mat(gp);
+    for (int i = 0; i < gp; ++i) {
+        mat[0][i] = mat[i][0] = 1;
+    }
 
     complex double *_in = (complex double *)malloc(sizeof(complex double)*size);
     memcpy(_in, in, sizeof(complex double)*size);
 
     task_queue_t queue;
     init_task_queue(&queue);
-    
+
     fft_task_t *t = (fft_task_t*)malloc(sizeof(fft_task_t));
     init_fft_task(_in, out, size, t);
     add_task(t, &queue);
@@ -174,13 +217,14 @@ void FFT_iter(complex double in[], complex double out[], int size){
                 (complex double *) malloc(sizeof(complex double) * p);
             complex double *out_temp =
                 (complex double *) malloc(sizeof(complex double) * p);
+            __init_omega_mat(mat, p);
             for(int i = 0; i < new_size; ++i){
                 for(int j = 0; j < p; ++j){
                     double degree = i * j * M_PI_MUL_2 / t->size;
                     complex double w = cos(degree) - I*sin(degree);
                     in_temp[j] = t->entries_out[j][i] * w;
                 } 
-                fft_function(in_temp, out_temp, p);
+                mat_multiplication(in_temp, out_temp, mat, p);
                 for(int j = 0; j < p; ++j){
                     t->out[i + new_size *j] = out_temp[j];
                 }
@@ -190,6 +234,8 @@ void FFT_iter(complex double in[], complex double out[], int size){
             free_task(&t);
         } 
     }
+    free(mat[0]);
+    free(mat);
 }
 
 
