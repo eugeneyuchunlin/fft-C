@@ -84,10 +84,22 @@ complex double **create_mat(int N){
 
 static void __init_omega_mat(complex double **mat, int N){
     double pi_2_DIV_N = M_PI_MUL_2 / N;
-    for (int i = 1; i < N; ++i) {
+    double degree;
+    
+    int half_n = N >> 1;
+    double _cos, _sin;
+    for(int i = 1; i <= half_n; ++i){
+        degree = pi_2_DIV_N * i;
+        _cos = cos(degree);
+        _sin = sin(degree);
+        mat[1][i] = _cos - I*_sin;
+        mat[1][N - i] = _cos + I*_sin;
+    }
+    int idx;
+    for (int i = 2; i < N; ++i) {
         for (int j = 1; j < N; ++j) {
-            double degree = pi_2_DIV_N * i * j;
-            mat[i][j] = cos(degree) - I*sin(degree); // cexp in slower than cos/sin
+            idx = i * j % N;
+            mat[i][j] = mat[1][idx]; // cexp in slower than cos/sin
         }
     }
 }
@@ -172,7 +184,7 @@ void FFT_iter(complex double in[], complex double out[], int size){
     
     fftn_function_t fft_function;
 
-    int p;
+    int p, mat_dim;
     fft_task_t *nt;
     while(queue.size > 0){
         // pop node
@@ -188,7 +200,11 @@ void FFT_iter(complex double in[], complex double out[], int size){
         }else{
             p = determine_p(t->size);
             if(p == t->size){
-                FFTN(t->in, t->out, t->size);
+                if(p != mat_dim){
+                    __init_omega_mat(mat, p);
+                    mat_dim = p;
+                }
+                mat_multiplication(t->in, t->out, mat, p);
                 free_task(&t);
                 continue;
             }
@@ -226,7 +242,10 @@ void FFT_iter(complex double in[], complex double out[], int size){
                 (complex double *) malloc(sizeof(complex double) * p);
             complex double *out_temp =
                 (complex double *) malloc(sizeof(complex double) * p);
-            __init_omega_mat(mat, p);
+            if(p != mat_dim) {
+                __init_omega_mat(mat, p);
+                mat_dim = p;
+            }
             for(int i = 0; i < new_size; ++i){
                 for(int j = 0; j < p; ++j){
                     double degree = i * j * M_PI_MUL_2 / t->size;
