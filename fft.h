@@ -1,13 +1,15 @@
 #ifndef __FFT_H__
 #define __FFT_H__
 
-#include "task.h"
 #include <complex.h>
+#include "task.h"
 
-typedef void(*fftn_function_t)(complex double *, complex double *, int);
+typedef void (*fftn_function_t)(complex double *, complex double *, int);
 
-void init_fft_task(complex double in[], complex double out[], int size,
-        fft_task_t * task);
+void init_fft_task(complex double in[],
+                   complex double out[],
+                   int size,
+                   fft_task_t *task);
 
 
 
