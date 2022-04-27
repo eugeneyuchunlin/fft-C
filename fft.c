@@ -478,10 +478,10 @@ static void __FFT(complex double in[],
 
         DETERMINE_FFT_MUL(p, __fft_mat_mul_func);
         for (int i = 0; i < new_size; ++i) {
+            double m_pi_mul_2_sz = M_PI_MUL_2 / size;
             for (int j = 0; j < p; ++j) {
-                double degree = i * j * M_PI_MUL_2 / size;
-                complex double w = OMEGA_WITH_DEG(degree);
-                in_temp[j] = entries_out[j][i] * w;
+                in_temp[j] = entries_out[j][i] *
+                             OMEGA_WITH_2PI_DIV_N(i * j, m_pi_mul_2_sz);
             }
             __fft_mat_mul_func(in_temp, out_temp, OMEGA_MAT, p);
 
@@ -518,11 +518,13 @@ void FFT(complex double in[], complex double out[], int size)
             _in = true;
         }
         if (_in) {
-            omegas[p] = malloc(sizeof(complex double) * p);
-            omegas[p][0] = 1;
-            for (int i = 1; i < p; ++i) {
+            omegas[p] = malloc(sizeof(complex double) * (p + 1));
+            int half_p = p >> 1;
+            for (int i = 0; i <= half_p; ++i) {
                 omegas[p][i] = OMEGA(i, p);
+                omegas[p][p - i] = conj(omegas[p][i]);
             }
+            omegas[p][0] = 1;
         }
         ++p;
     }
