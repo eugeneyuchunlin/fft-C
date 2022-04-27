@@ -11,18 +11,6 @@ extern "C" {
 #define __LIST_HAVE_TYPEOF 1
 #endif
 
-// #ifndef container_of
-// #ifdef __LIST_HAVE_TYPEOF
-// #define container_of(ptr, type, member)                            \
-//     __extension__({                                                \
-//         const __typeof__(((type *) 0)->member) *__pmember = (ptr); \
-//         (type *) ((char *) __pmember - offsetof(type, member));    \
-//     })
-// #else
-// #define container_of(ptr, type, member) \
-//     ((type *) ((char *) (ptr) -offsetof(type, member)))
-// #endif
-
 #ifndef container_of
 #ifdef __LIST_HAVE_TYPEOF
 #define container_of(ptr, type, member)                            \

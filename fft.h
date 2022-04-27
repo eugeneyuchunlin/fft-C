@@ -15,17 +15,7 @@ void init_fft_task(complex double in[],
 
 void FFT_iter(complex double in[], complex double out[], int size);
 
-/**
- * FFT2() -  A simple FFT for 2 elements
- */
-void FFT2(complex double in[], complex double out[]);
 void FFT2N(complex double in[], complex double out[], int size);
-
-/**
- * FFT3() - A simple FFT for 3 elements
- */
-void FFT3(complex double in[], complex double out[]);
-
 /**
  * FFT() - A general FFT for 2^q elements of data
  */

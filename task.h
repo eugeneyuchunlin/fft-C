@@ -13,7 +13,7 @@ struct __task_t {
     complex double *in;
     complex double *out;
     complex double **entries_out;
-    int size_of_entries_out;
+    int dim_x, dim_y;
     enum TASK_TYPE type;
 };
 typedef struct __task_t fft_task_t;
@@ -62,7 +62,7 @@ static inline void free_task(fft_task_t **t)
     if (t) {
         fft_task_t *_t = *t;
         if (_t->entries_out) {
-            for (int i = 0; i < _t->size_of_entries_out; ++i)
+            for (int i = 0; i < _t->dim_y; ++i)
                 free(_t->entries_out[i]);
             free(_t->entries_out);
         }
