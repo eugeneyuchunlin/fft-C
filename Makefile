@@ -1,16 +1,22 @@
 CC := gcc
-CFLAGS := -O3
+CFLAGS := -O3 -Wall
+
 
 all : example verify
 
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S), Linux)
+	CFLAGS += -lm
+endif
+
 %.o : %.c
-	$(CC) $(CFLAGS) -c $< -o $@ -lm
+	$(CC)  -c $< -o $@ $(CFLAGS)
 
 example : example.o fft.o
-	$(CC) $(CFLAGS) example.o fft.o -o example -lm
+	$(CC) example.o fft.o -o example $(CFLAGS)
 
 verify: fft.o verify.o 
-	$(CC) $(CFLAGS)  fft.o verify.o -o verify -lm
+	$(CC) fft.o verify.o -o verify $(CFLAGS) 
 
 clean:
 	-rm example
@@ -18,4 +24,3 @@ clean:
 	-rm *.o
 
 .PHONY: clean
-

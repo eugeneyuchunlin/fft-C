@@ -10,7 +10,7 @@
 
 int main()
 {
-    const int size = 4;
+    const int size = 7*11*17*30*30;
 
     //     fft_task_queue_t queue;
     //     INIT_LIST_HEAD(&queue.list);

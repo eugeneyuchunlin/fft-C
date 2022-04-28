@@ -265,89 +265,51 @@ int greatest_prime(int number)
 }
 
 
-void FFT_iter(complex double in[], complex double out[], int size)
+
+
+void _FFT_iter(task_queue_t * queue, complex double const* const*omegas)
 {
-    // find the greatest prime
-    int gp = greatest_prime(size);
-    int p, mat_dim;
-    complex double **mat = create_mat(gp);
-    for (int i = 0; i < gp; ++i) {
-        mat[0][i] = mat[i][0] = 1;
-    }
-
-    complex double *_in =
-        (complex double *) malloc(sizeof(complex double) * size);
-    complex double *in_temp =
-        (complex double *) malloc(sizeof(complex double) * gp);
-    complex double *out_temp =
-        (complex double *) malloc(sizeof(complex double) * gp);
-
-    complex double *omegas[10000] = {0};
-    p = 2;
-    int n_size = size;
-    double _sin, _cos;
-    while (p <= n_size) {
-        if (n_size % p == 0) {
-            n_size /= p;
-            if (omegas[p] == NULL) {
-                omegas[p] =
-                    (complex double *) malloc(sizeof(complex double) * p);
-                omegas[p][0] = 1;
-                for (int i = 1; i < p; ++i) {
-                    sincos(i * M_PI_MUL_2 / p, &_sin, &_cos);
-                    omegas[p][i] = _cos - I * _sin;
-                }
-            }
-        } else {
-            ++p;
-        }
-    }
-
-
-    memcpy(_in, in, sizeof(complex double) * size);
-    task_queue_t queue;
-    init_task_queue(&queue);
-
-    fft_task_t *t = (fft_task_t *) malloc(sizeof(fft_task_t));
-    init_fft_task(_in, out, size, t);
-    add_task(t, &queue);
-
-    mat_mult_func_t mat_mul;
-
-    fft_task_t *nt;
-    while (queue.size > 0) {
+    int p = 2;
+    fft_task_t *nt, *t;
+    while (queue->size > 0) {
         // pop node
-        pop_task(&t, &queue);
-        if (t->size == 2) {
-            FFT2(t->in, t->out);
-            free_task(&t);
+        pop_task(&t, queue);
+        if(t->size == 1){
+            __FFT1_MAT_MUL(t->in, t->out, NULL, 0);
+            recycle_task(t, queue);
+            continue;
+        }else if (t->size == 2) {
+            __FFT2_MAT_MUL(t->in, t->out, NULL, 0);
+            recycle_task(t, queue);
             continue;
         } else if (t->size == 3) {
-            FFT3(t->in, t->out);
-            free_task(&t);
+            __FFT3_MAT_MUL(t->in, t->out, NULL, 0);
+            recycle_task(t, queue);
             continue;
         } else if (t->size == 5) {
-            FFT5(t->in, t->out);
-            free_task(&t);
+            __FFT5_MAT_MUL(t->in, t->out, NULL, 0);
+            recycle_task(t, queue);
             continue;
         } else {
             p = determine_p(t->size);
             if (p == t->size) {
-                if (p != mat_dim) {
-                    ___init_OMEGA_MAT(mat, omegas[p], p);
-                    mat_dim = p;
+                for(int i = 0; i < t->size; ++i){
+                    complex double sum = 0;
+                    for(int j = 0; j < t->size; ++j){
+                        sum += t->in[j] * omegas[t->size][(i*j) % t->size];
+                    }
+                    t->out[i] = sum;
                 }
-                mat_multiplication(t->in, t->out,
-                                   (complex double const *const *) mat, p);
-                free_task(&t);
+                
+                recycle_task(t, queue);
                 continue;
             }
         }
         if (t->type == DIVIDE) {
             int new_size = t->size / p;
             // reentrant
-            add_task(t, &queue);
-            t->type = MERGE;
+            add_task(t, queue);
+            t->type = CROSS;
             complex double **entries_out =
                 (complex double **) malloc(sizeof(complex double *) * p);
             for (int i = 0; i < p; ++i) {
@@ -362,47 +324,88 @@ void FFT_iter(complex double in[], complex double out[], int size)
                     entries_in[j] = t->in[j * p + i];
                 }
 
-                nt = malloc(sizeof(fft_task_t));
+                // nt = malloc(sizeof(fft_task_t));
+                nt = get_free_task(queue);
                 init_fft_task(entries_in, entries_out[i], new_size, nt);
-                add_task(nt, &queue);
+                add_task(nt, queue);
             }
             t->entries_out = entries_out;
             t->dim_y = p;
             t->dim_x = new_size;
-            // printf("List task : \n");
+            // printf("[DIVIDE]List task : \n");
             // list_task(&queue);
             // printf("");
-        } else {  // type is MERGE
-            mat_mul =
-                (mat_mult_func_t) ((p == 2) * (unsigned long) __FFT2_MAT_MUL +
-                                   (p == 3) * (unsigned long) __FFT3_MAT_MUL +
-                                   (p == 5) * (unsigned long) __FFT5_MAT_MUL +
-                                   (p != 2 && p != 3 && p != 5) *
-                                       (unsigned long) mat_multiplication);
-            if (p != mat_dim) {
-                ___init_OMEGA_MAT(mat, omegas[p], p);
-                mat_dim = p;
-            }
+        } else if(t->type == CROSS){  // type is CROSS
+            complex double **out_temp = malloc(sizeof(complex double*)*t->dim_x);
+            add_task(t, queue);
+            for(int i = 0; i < t->dim_x;++i){
+                complex double *in_temp = (complex double*)malloc(sizeof(complex double)*t->dim_y);
+                out_temp[i] = malloc(sizeof(complex double)*t->dim_y);
+                for(int j = 0; j < t->dim_y; ++j){
+                    in_temp[j] = t->entries_out[j][i] * OMEGA(i*j, t->size);
+                }
 
-            for (int i = 0; i < t->dim_x; ++i) {
-                for (int j = 0; j < p; ++j) {
-                    int idx = i * j;
-                    double degree = idx * M_PI_MUL_2 / t->size;
-                    sincos(degree, &_sin, &_cos);
-                    in_temp[j] = t->entries_out[j][i] * (_cos - I * _sin);
-                }
-                mat_mul(in_temp, out_temp, mat, p);
-                for (int j = 0; j < p; ++j) {
-                    t->out[i + t->dim_x * j] = out_temp[j];
-                }
+                // nt = malloc(sizeof(fft_task_t));
+                nt = get_free_task(queue);
+                init_fft_task(in_temp, out_temp[i], t->dim_y, nt);
+                add_task(nt, queue);
             }
-            free_task(&t);
+            for(int i = 0; i < t->dim_y; ++i){
+                free(t->entries_out[i]);
+            }
+            free(t->entries_out);
+            t->entries_out = out_temp;
+            t->type = MERGE;
+            // printf("[CROSS]List task : \n");
+            // list_task(&queue);
+            // printf("");
+        }else{ // MERGE
+            for(int i = 0; i < t->dim_x; ++i){
+                for(int j = 0; j < t->dim_y; ++j){
+                    t->out[i + t->dim_x * j] = t->entries_out[i][j];
+                }
+                // free(t->entries_out[i]);
+            } 
+            // free(t->entries_out);
+            recycle_task(t, queue);
         }
     }
-    free(mat[0]);
-    free(mat);
-    free(in_temp);
-    free(out_temp);
+}
+
+void FFT_iter(complex double in[], complex double out[], int size){
+    int p = 2;
+    complex double **omegas = (complex double**)malloc(sizeof(complex double*)*1000);
+    int n_size = size;
+    while (p <= n_size) {
+        if (n_size % p == 0) {
+            n_size /= p;
+            if (omegas[p] == NULL) {
+                omegas[p] =
+                    (complex double *) malloc(sizeof(complex double) * (p+1));
+                int half_p = p >> 1;
+                for (int i = 0; i <= half_p; ++i) {
+                    omegas[p][i] = OMEGA_WITH_DEG(i*M_PI_MUL_2/p);
+                    omegas[p][p - i] = conj(omegas[p][i]);
+                }
+                omegas[p][0] = 1;
+            }
+        } else {
+            ++p;
+        }
+    }
+
+    complex double *_in = (complex double*)malloc(sizeof(complex double)*size);
+    memcpy(_in, in, sizeof(complex double)*size);
+    task_queue_t queue;
+    init_task_queue(&queue);
+    premalloc_tasks(&queue, 10000);
+
+    fft_task_t *t = get_free_task(&queue);
+    init_fft_task(_in, out, size, t);
+    add_task(t, &queue);
+
+    _FFT_iter(&queue, (complex double const *const*)omegas); 
+    destroy_task_queue(&queue);
 }
 
 
@@ -506,7 +509,6 @@ void FFT(complex double in[], complex double out[], int size)
     // defraction of size to init the omegas table
     int _tmp_size = size;
     int p = 2;
-    double _cos, _sin;
     while (p <= _tmp_size) {
         bool _in = false;
         while (_tmp_size % p == 0) {
