@@ -1,8 +1,16 @@
 #ifndef __FFT_H__
 #define __FFT_H__
 
+#undef _GNU_SOURCE
+#if defined(__linux__) || defined(linux) || defined(__linux) || defined(__gnu_linux__)
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#endif
+#include <math.h>
 #include <complex.h>
 #include "task.h"
+
 
 typedef void (*fftn_function_t)(complex double *, complex double *, int);
 

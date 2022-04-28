@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+
 #define SQRT3 1.7320508075688771931766041
 #define SQRT3_DIV_2 0.8660254037844385965883021
 #define M_PI_MUL_2 6.2831853071795862319959269
@@ -16,11 +17,6 @@
 #define W51_IMG_ABS 0.9510565162951535311819384
 #define W52_REAL_ABS 0.8090169943749473402405670
 #define W52_IMG_ABS 0.5877852522924732481257593
-
-#ifdef __linux__
-#define _GNU_SOURCE
-#endif
-#include <math.h>
 
 #ifndef _GNU_SOURCE
 #ifdef __APPLE__
