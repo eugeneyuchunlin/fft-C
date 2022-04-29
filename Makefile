@@ -1,8 +1,10 @@
 CC := gcc
-CFLAGS := -O3 -Wall
+CFLAGS := -Ofast -Wall
 
 
 all : example verify
+
+VALGRIND := valgrind
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S), Linux)
@@ -17,6 +19,9 @@ example : example.o fft.o
 
 verify: fft.o verify.o 
 	$(CC) fft.o verify.o -o verify $(CFLAGS) 
+
+valgrind: example
+	$(VALGRIND) --leak-check=full ./example	
 
 clean:
 	-rm example

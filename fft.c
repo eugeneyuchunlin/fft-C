@@ -41,6 +41,12 @@
 
 #define OMEGA(ij, N) OMEGA_WITH_2PI_DIV_N(ij, (M_PI_MUL_2 / (N)))
 
+// actually I need to check two types of a, b
+#define SWAP(a, b)\
+    __extension__({ \
+                __typeof__(a) temp; temp = a; a = b; b = temp; \
+            })
+
 
 #define _FFT1_CONTENT   \
     {                   \
@@ -134,88 +140,10 @@ typedef void (*fft_mat_mul_func_t)(complex double *,
                                    complex double *,
                                    complex double const *const *,
                                    int);
-
-
-void mat_multiplication(complex double in[],
-                        complex double out[],
-                        complex double const *const *mat,
-                        int N)
-{
-    for (int i = 0; i < N; ++i) {
-        complex double sum = 0;
-        for (int j = 0; j < N; ++j) {
-            sum += mat[i][j] * in[j];
-        }
-        out[i] = sum;
-    }
-}
 typedef void (*mat_mult_func_t)(complex double *,
                                 complex double *,
                                 complex double **,
                                 int);
-
-complex double **create_mat(int N)
-{
-    complex double *_mat;
-    complex double **mat;
-    _mat = malloc(sizeof(complex double) * N * N);
-    mat = malloc(sizeof(complex double *) * N);
-
-    for (int i = 0; i < N; ++i) {
-        mat[i] = _mat + (i * N);
-    }
-
-    return mat;
-}
-
-static void __init_OMEGA_MAT(complex double **mat, int N)
-{
-    double pi_2_DIV_N = M_PI_MUL_2 / N;
-    double degree;
-
-    int half_n = N >> 1;
-    double _cos, _sin;
-    for (int i = 1; i <= half_n; ++i) {
-        degree = pi_2_DIV_N * i;
-        _cos = cos(degree);
-        _sin = sin(degree);
-        mat[1][i] = _cos - I * _sin;
-        mat[1][N - i] = _cos + I * _sin;
-    }
-    int idx;
-    for (int i = 2; i < N; ++i) {
-        for (int j = 1; j < N; ++j) {
-            idx = i * j % N;
-            mat[i][j] = mat[1][idx];  // cexp in slower than cos/sin
-        }
-    }
-}
-
-static void ___init_OMEGA_MAT(complex double **mat,
-                              complex double *omegas,
-                              int N)
-{
-    for (int i = 1; i < N; ++i) {
-        for (int j = i; j < N; ++j) {
-            int idx = i * j % N;
-            mat[j][i] = mat[i][j] = omegas[idx];
-        }
-    }
-}
-
-void FFTN(complex double in[], complex double out[], int N)
-{
-    complex double **mat = create_mat(N);
-    __init_OMEGA_MAT(mat, N);
-    for (int i = 0; i < N; ++i) {
-        mat[0][i] = mat[i][0] = 1;
-    }
-    mat_multiplication(in, out, (complex double const *const *) mat, N);
-    free(mat[0]);
-    free(mat);
-}
-
-
 
 void init_fft_task(complex double in[],
                    complex double out[],
@@ -250,22 +178,6 @@ int determine_p(int size)
 
     return p;
 }
-
-int greatest_prime(int number)
-{
-    int p = 2;
-    while (p <= number) {
-        if (number % p == 0) {
-            number /= p;
-        } else {
-            ++p;
-        }
-    }
-    return p;
-}
-
-
-
 
 void _FFT_iter(task_queue_t * queue, complex double const* const*omegas)
 {
@@ -344,8 +256,7 @@ void _FFT_iter(task_queue_t * queue, complex double const* const*omegas)
                 for(int j = 0; j < t->dim_y; ++j){
                     in_temp[j] = t->entries_out[j][i] * OMEGA(i*j, t->size);
                 }
-
-                // nt = malloc(sizeof(fft_task_t));
+                // printf("t->size = %d\n", t->size);
                 nt = get_free_task(queue);
                 init_fft_task(in_temp, out_temp[i], t->dim_y, nt);
                 add_task(nt, queue);
@@ -375,6 +286,7 @@ void _FFT_iter(task_queue_t * queue, complex double const* const*omegas)
 void FFT_iter(complex double in[], complex double out[], int size){
     int p = 2;
     complex double **omegas = (complex double**)malloc(sizeof(complex double*)*1000);
+    memset(omegas, 0, sizeof(complex double*)*1000);
     int n_size = size;
     while (p <= n_size) {
         if (n_size % p == 0) {
@@ -406,6 +318,11 @@ void FFT_iter(complex double in[], complex double out[], int size){
 
     _FFT_iter(&queue, (complex double const *const*)omegas); 
     destroy_task_queue(&queue);
+    for(int i = 0; i < 1000; ++i){
+        if(omegas[i] != NULL)
+            free(omegas[i]);
+    }
+    free(omegas);
 }
 
 
@@ -526,8 +443,13 @@ void FFT(complex double in[], complex double out[], int size)
         }
         ++p;
     }
-
     __FFT(in, out, (complex double const *const *) omegas, size);
+    for(int i = 0; i < 1000;++i){
+        if(omegas[i] != 0){
+            free(omegas[i]);
+        }
+    }
+    free(omegas);
 }
 
 
