@@ -2,13 +2,14 @@
 #define __FFT_H__
 
 #undef _GNU_SOURCE
-#if defined(__linux__) || defined(linux) || defined(__linux) || defined(__gnu_linux__)
+#if defined(__linux__) || defined(linux) || defined(__linux) || \
+    defined(__gnu_linux__)
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
 #endif
-#include <math.h>
 #include <complex.h>
+#include <math.h>
 #include "task.h"
 
 
@@ -38,5 +39,9 @@ void FFTN(complex double in[], complex double out[], int N);
  * legacy_FFT() - A legacy fft which performs on O(N^2) complexity
  */
 void legacy_FFT(complex double in[], complex double out[], int size);
+
+
+void IFFT(complex double in[], complex double out[], int size);
+
 
 #endif
