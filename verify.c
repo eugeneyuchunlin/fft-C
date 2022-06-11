@@ -62,6 +62,7 @@ void test(int test_size)
         assert(fabs(cimag(out_iter[i]) - cimag(out_legacy[i])) < 0.001);
 
         assert(fabs(creal(ifft_out[i]) - creal(array[i])) < 0.001);
+        assert(fabs(cimag(ifft_out[i])) < 0.001);
     }
 
     free(array);

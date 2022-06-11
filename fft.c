@@ -49,11 +49,22 @@
 #define CONJ_OMEGA_WITH_2PI_DIV_N(ij, PI_2_DIV_N) \
     CONJ_OMEGA_WITH_DEG(ij *PI_2_DIV_N)
 
+static inline complex double omega_with_2pi_div_n(int ij, double cst)
+{
+    return OMEGA_WITH_2PI_DIV_N(ij, cst);
+}
+
+static inline complex double conj_omega_with_2pi_div_n(int ij, double cst)
+{
+    return CONJ_OMEGA_WITH_2PI_DIV_N(ij, cst);
+}
+
+
 #define OMEGA(ij, N) OMEGA_WITH_2PI_DIV_N(ij, (M_PI_MUL_2 / (N)))
 #define CONJ_OMEGA(ij, N) CONJ_OMEGA_WITH_2PI_DIV_N(ij, (M_PI_MUL_2 / (N)))
 
 
-// actually I need to check two types of a, b
+// TODO: I need to check two types of a, b
 #define SWAP(a, b)          \
     __extension__({         \
         __typeof__(a) temp; \
@@ -71,8 +82,6 @@
 #define _INV_FFT1_CONTENT \
     {                     \
         out[0] = in[0];   \
-        \ 
-                                    \
     }
 
 
@@ -147,24 +156,21 @@
             in[0] + w54 * in[1] + w53 * in[2] + w52 * in[3] + w51 * in[4]; \
     }
 
-#define _INV_FFT5_CONTENT                                                  \
-    {                                                                      \
-        static const complex double w51 = W51_REAL_ABS - I * W51_IMG_ABS;  \
-        static const complex double w52 = -W52_REAL_ABS - I * W52_IMG_ABS; \
-        static const complex double w53 = -W52_REAL_ABS + I * W52_IMG_ABS; \
-        static const complex double w54 = W51_REAL_ABS + I * W51_IMG_ABS;  \
-        out[0] = in[0] + in[1] + in[2] + in[3] + in[4];                    \
-        out[1] =                                                           \
-            in[0] + w54 * in[1] + w53 * in[2] + w52 * in[3] + w51 * in[4]; \
-        out[2] =                                                           \
-            in[0] + w53 * in[1] + w51 * in[2] + w54 * in[3] + w52 * in[4]; \
-        out[3] =                                                           \
-            in[0] + w52 * in[1] + w54 * in[2] + w51 * in[3] + w53 * in[4]; \
-        out[4] =                                                           \
-            in[0] + w51 * in[1] + w52 * in[2] + w53 * in[3] + w54 * in[4]; \
-        for (int i = 0; i < 5; ++i) {                                      \
-            out[i] *= 0.2;                                                 \
-        }                                                                  \
+#define _INV_FFT5_CONTENT                                                    \
+    {                                                                        \
+        static const complex double w51 = (W51_REAL_ABS - I * W51_IMG_ABS);  \
+        static const complex double w52 = (-W52_REAL_ABS - I * W52_IMG_ABS); \
+        static const complex double w53 = (-W52_REAL_ABS + I * W52_IMG_ABS); \
+        static const complex double w54 = (W51_REAL_ABS + I * W51_IMG_ABS);  \
+        out[0] = 0.2 * (in[0] + in[1] + in[2] + in[3] + in[4]);              \
+        out[1] = 0.2 * (in[0] + w54 * in[1] + w53 * in[2] + w52 * in[3] +    \
+                        w51 * in[4]);                                        \
+        out[2] = 0.2 * (in[0] + w53 * in[1] + w51 * in[2] + w54 * in[3] +    \
+                        w52 * in[4]);                                        \
+        out[3] = 0.2 * (in[0] + w52 * in[1] + w54 * in[2] + w51 * in[3] +    \
+                        w53 * in[4]);                                        \
+        out[4] = 0.2 * (in[0] + w51 * in[1] + w52 * in[2] + w53 * in[3] +    \
+                        w54 * in[4]);                                        \
     }
 
 
@@ -230,11 +236,15 @@ DECLARE_IFFTX_FUNC(5)
         case 3:                      \
             (func) = __FFT3_MAT_MUL; \
             break;                   \
+        case 5:                      \
+            (func) = __FFT5_MAT_MUL; \
+            break;                   \
         default:                     \
             (func) = __FFT;          \
             break;                   \
         }                            \
     } while (0)
+
 #define DETERMINE_IFFT_MUL(num, func) \
     do {                              \
         switch ((num)) {              \
@@ -247,6 +257,9 @@ DECLARE_IFFTX_FUNC(5)
         case 3:                       \
             (func) = __IFFT3_MAT_MUL; \
             break;                    \
+        case 5:                       \
+            (func) = __IFFT5_MAT_MUL; \
+            break;                    \
         default:                      \
             (func) = __IFFT;          \
             break;                    \
@@ -254,6 +267,7 @@ DECLARE_IFFTX_FUNC(5)
     } while (0)
 
 
+typedef void (*fft_native_func_t)(complex double *, complex double *);
 
 typedef void (*fft_mat_mul_func_t)(complex double *,
                                    complex double *,
@@ -263,6 +277,8 @@ typedef void (*mat_mult_func_t)(complex double *,
                                 complex double *,
                                 complex double **,
                                 int);
+
+typedef complex double (*omega_with_2pi_div_n_func_t)(int, double);
 
 void init_fft_task(complex double in[],
                    complex double out[],
@@ -452,19 +468,20 @@ void FFT_iter(complex double in[], complex double out[], int size)
 static void __FFT(complex double in[],
                   complex double out[],
                   complex double const *const *OMEGA_MAT,
+                  fft_native_func_t functions[],
+                  omega_with_2pi_div_n_func_t omega_func,
                   int size)
 {
-    fft_mat_mul_func_t __fft_mat_mul_func;
     if (size == 0) {
         return;
     } else if (size == 1) {
         out[0] = in[0];
     } else if (size == 2) {
-        FFT2(in, out);
+        functions[0](in, out);
     } else if (size == 3) {
-        FFT3(in, out);
+        functions[1](in, out);
     } else if (size == 5) {
-        FFT5(in, out);
+        functions[2](in, out);
     } else {
         int p = 1;
         if (size % 2 == 0) {
@@ -491,7 +508,6 @@ static void __FFT(complex double in[],
         }
 
         int new_size = size / p;
-        DETERMINE_FFT_MUL(new_size, __fft_mat_mul_func);
         complex double **entries_out, *__entries_out_content;
         complex double *entries_in = malloc(sizeof(complex double) * new_size);
         __entries_out_content =
@@ -506,7 +522,8 @@ static void __FFT(complex double in[],
             for (int j = 0; j < new_size; ++j) {
                 entries_in[j] = in[j * p + i];
             }
-            __fft_mat_mul_func(entries_in, entries_out[i], OMEGA_MAT, new_size);
+            __FFT(entries_in, entries_out[i], OMEGA_MAT, functions, omega_func,
+                  new_size);
         }
 
 
@@ -514,14 +531,13 @@ static void __FFT(complex double in[],
             (complex double *) malloc(sizeof(complex double) * (p << 1));
         complex double *out_temp = in_temp + p;
 
-        DETERMINE_FFT_MUL(p, __fft_mat_mul_func);
         for (int i = 0; i < new_size; ++i) {
             double m_pi_mul_2_sz = M_PI_MUL_2 / size;
             for (int j = 0; j < p; ++j) {
-                in_temp[j] = entries_out[j][i] *
-                             OMEGA_WITH_2PI_DIV_N(i * j, m_pi_mul_2_sz);
+                in_temp[j] =
+                    entries_out[j][i] * omega_func(i * j, m_pi_mul_2_sz);
             }
-            __fft_mat_mul_func(in_temp, out_temp, OMEGA_MAT, p);
+            __FFT(in_temp, out_temp, OMEGA_MAT, functions, omega_func, p);
 
             for (int j = 0; j < p; ++j) {
                 out[i + new_size * j] = out_temp[j];
@@ -534,7 +550,7 @@ static void __FFT(complex double in[],
     }
 }
 
-void FFT(complex double in[], complex double out[], int size)
+void _FFT(complex double in[], complex double out[], int size, bool inverse)
 {
     // from https://en.wikipedia.org/wiki/List_of_prime_numbers
     // There are 1000 prime numbers under 7919
@@ -554,24 +570,55 @@ void FFT(complex double in[], complex double out[], int size)
             _tmp_size /= p;
             _in = true;
         }
+        int _exp_conj = inverse * (-1) + !inverse;
+        double __one_over_p = (inverse * (1.0 / p) + !inverse);
         if (_in) {
             omegas[p] = malloc(sizeof(complex double) * (p + 1));
             int half_p = p >> 1;
             for (int i = 0; i <= half_p; ++i) {
-                omegas[p][i] = OMEGA(i, p);
+                omegas[p][i] = OMEGA(i * _exp_conj, p) * __one_over_p;
                 omegas[p][p - i] = conj(omegas[p][i]);
             }
-            omegas[p][0] = 1;
+            omegas[p][0] = __one_over_p;
         }
         ++p;
     }
-    __FFT(in, out, (complex double const *const *) omegas, size);
+
+    fft_native_func_t functions[3];
+    if (inverse) {
+        functions[0] = IFFT2;
+        functions[1] = IFFT3;
+        functions[2] = IFFT5;
+    } else {
+        functions[0] = FFT2;
+        functions[1] = FFT3;
+        functions[2] = FFT5;
+    }
+
+    __FFT(in, out, (complex double const *const *) omegas, functions,
+          (omega_with_2pi_div_n_func_t) ((unsigned long)
+                                                 conj_omega_with_2pi_div_n *
+                                             inverse +
+                                         (unsigned long) omega_with_2pi_div_n *
+                                             !inverse),
+          size);
+
     for (int i = 0; i < 1000; ++i) {
         if (omegas[i] != 0) {
             free(omegas[i]);
         }
     }
     free(omegas);
+}
+
+void FFT(complex double in[], complex double out[], int size)
+{
+    _FFT(in, out, size, false);
+}
+
+void IFFT(complex double in[], complex double out[], int size)
+{
+    _FFT(in, out, size, true);
 }
 
 
@@ -586,129 +633,4 @@ void legacy_FFT(complex double in[], complex double out[], int size)
         }
         out[k] = sum;
     }
-}
-
-
-static void __IFFT(complex double in[],
-                   complex double out[],
-                   complex double const *const *OMEGA_MAT,
-                   int size)
-{
-    fft_mat_mul_func_t __fft_mat_mul_func;
-    if (size == 0) {
-        return;
-    } else if (size == 1) {
-        out[0] = in[0];
-    } else if (size == 2) {
-        IFFT2(in, out);
-    } else if (size == 3) {
-        IFFT3(in, out);
-    } else if (size == 5) {
-        IFFT5(in, out);
-    } else {
-        int p = 1;
-        if (size % 2 == 0) {
-            p = 2;
-        } else if (size % 3 == 0) {
-            p = 3;
-        } else {
-            for (int i = 5; i <= size; ++i) {
-                if (size % i == 0) {
-                    p = i;
-                    break;
-                }
-            }
-            if (p == size) {
-                for (int i = 0; i < size; ++i) {
-                    complex double sum = 0;
-                    for (int j = 0; j < size; ++j) {
-                        sum += in[j] * OMEGA_MAT[size][(i * j) % size];
-                    }
-                    out[i] = sum;
-                }
-                return;
-            }
-        }
-
-        int new_size = size / p;
-        DETERMINE_IFFT_MUL(new_size, __fft_mat_mul_func);
-        complex double **entries_out, *__entries_out_content;
-        complex double *entries_in = malloc(sizeof(complex double) * new_size);
-        __entries_out_content =
-            (complex double *) malloc(sizeof(complex double) * p * new_size);
-        entries_out = (complex double **) malloc(sizeof(complex double *) * p);
-        for (int i = 0; i < p; ++i) {
-            entries_out[i] = __entries_out_content + (i * new_size);
-        }
-
-        // place the data;
-        for (int i = 0; i < p; ++i) {
-            for (int j = 0; j < new_size; ++j) {
-                entries_in[j] = in[j * p + i];
-            }
-            __fft_mat_mul_func(entries_in, entries_out[i], OMEGA_MAT, new_size);
-        }
-
-
-        complex double *in_temp =
-            (complex double *) malloc(sizeof(complex double) * (p << 1));
-        complex double *out_temp = in_temp + p;
-
-        DETERMINE_IFFT_MUL(p, __fft_mat_mul_func);
-        for (int i = 0; i < new_size; ++i) {
-            double m_pi_mul_2_sz = M_PI_MUL_2 / size;
-            for (int j = 0; j < p; ++j) {
-                in_temp[j] = entries_out[j][i] *
-                             CONJ_OMEGA_WITH_2PI_DIV_N(i * j, m_pi_mul_2_sz);
-            }
-            __fft_mat_mul_func(in_temp, out_temp, OMEGA_MAT, p);
-
-            for (int j = 0; j < p; ++j) {
-                out[i + new_size * j] = out_temp[j];
-            }
-        }
-        free(in_temp);
-        free(entries_in);
-        free(entries_out);
-        free(__entries_out_content);
-    }
-}
-
-void IFFT(complex double in[], complex double out[], int size)
-{
-    // from https://en.wikipedia.org/wiki/List_of_prime_numbers
-    // There are 1000 prime numbers under 7919
-    // omegas is a table to compute the FFT matrix first to reduct the redundant
-    // computation. The initialization process would base on the prime divisor
-    // number of @size.
-    complex double **omegas = malloc(sizeof(complex double *) * 1000);
-    memset(omegas, 0, sizeof(complex double *) * 1000);
-
-    // defraction of size to init the omegas table
-    int _tmp_size = size;
-    int p = 2;
-    while (p <= _tmp_size) {
-        bool _in = false;
-        while (_tmp_size % p == 0) {
-            _tmp_size /= p;
-            _in = true;
-        }
-        if (_in) {
-            omegas[p] = malloc(sizeof(complex double) * (p + 1));
-            int half_p = p >> 1;
-            for (int i = 0; i <= half_p; ++i) {
-                omegas[p][i] = CONJ_OMEGA(i, p) / p;
-                omegas[p][p - i] = conj(omegas[p][i]);
-            }
-            omegas[p][0] = 1.0 / p;
-        }
-        ++p;
-    }
-    __IFFT(in, out, (complex double const *const *) omegas, size);
-    for (int i = 0; i < 1000; ++i) {
-        if (omegas[i] != 0) {
-            free(omegas[i]);
-        }
-    }
-    free(omegas);
 }

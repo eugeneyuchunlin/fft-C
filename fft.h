@@ -10,6 +10,7 @@
 #endif
 #include <complex.h>
 #include <math.h>
+#include <stdbool.h>
 #include "task.h"
 
 
@@ -29,6 +30,7 @@ void FFT2N(complex double in[], complex double out[], int size);
  * FFT() - A general FFT for 2^q elements of data
  */
 void FFT(complex double in[], complex double out[], int size);
+void IFFT(complex double in[], complex double out[], int size);
 
 
 void FFT3N(complex double in[], complex double out[], int size);
@@ -40,8 +42,6 @@ void FFTN(complex double in[], complex double out[], int N);
  */
 void legacy_FFT(complex double in[], complex double out[], int size);
 
-
-void IFFT(complex double in[], complex double out[], int size);
 
 
 #endif

@@ -5,13 +5,9 @@
 #include <stdlib.h>
 #include "queue.h"
 
-enum TASK_TYPE { 
-    DIVIDE, 
-    CROSS,
-    MERGE 
-};
+enum TASK_TYPE { DIVIDE, CROSS, MERGE };
 
-struct __memory_segment_node_t{
+struct __memory_segment_node_t {
     struct list_head node;
     void *_address;
     size_t bytes;
@@ -49,17 +45,19 @@ static inline void init_task_queue(task_queue_t *queue)
     queue->__size_of_free_nodes = 0;
 }
 
-static inline void premalloc_tasks(task_queue_t *queue, int number){
-    mem_seg_t * seg = (mem_seg_t *)malloc(sizeof(mem_seg_t) +sizeof(fft_task_t)*number);
-    if(seg == NULL){
+static inline void premalloc_tasks(task_queue_t *queue, int number)
+{
+    mem_seg_t *seg =
+        (mem_seg_t *) malloc(sizeof(mem_seg_t) + sizeof(fft_task_t) * number);
+    if (seg == NULL) {
         perror("Malloc Failed");
         exit(EXIT_FAILURE);
     }
-    seg->bytes = sizeof(mem_seg_t) + sizeof(fft_task_t)*number;
+    seg->bytes = sizeof(mem_seg_t) + sizeof(fft_task_t) * number;
     INIT_LIST_HEAD(&seg->node);
     enqueue(&seg->node, &queue->_allocated_memories);
-    fft_task_t *__memory = (fft_task_t*)((char*)seg + sizeof(mem_seg_t));
-    for(int i = 0; i < number; ++i){
+    fft_task_t *__memory = (fft_task_t *) ((char *) seg + sizeof(mem_seg_t));
+    for (int i = 0; i < number; ++i) {
         fft_task_t *t = &__memory[i];
         INIT_LIST_HEAD(&t->node);
         enqueue(&t->node, &queue->_free_nodes);
@@ -67,11 +65,12 @@ static inline void premalloc_tasks(task_queue_t *queue, int number){
     }
 }
 
-static inline void destroy_task_queue(task_queue_t *queue){
+static inline void destroy_task_queue(task_queue_t *queue)
+{
     // free the memory
     struct list_head *node;
     mem_seg_t *sg;
-    while(!list_empty(&queue->_allocated_memories)){
+    while (!list_empty(&queue->_allocated_memories)) {
         dequeue(&node, &queue->_allocated_memories);
         sg = list_entry(node, mem_seg_t, node);
         free(sg);
@@ -82,7 +81,7 @@ static inline fft_task_t *get_free_task(task_queue_t *queue)
 {
     fft_task_t *t;
     struct list_head *node;
-    if(!queue->__size_of_free_nodes){
+    if (!queue->__size_of_free_nodes) {
         premalloc_tasks(queue, 1000);
     }
     dequeue(&node, &queue->_free_nodes);
@@ -98,7 +97,8 @@ static inline void recycle_task(fft_task_t *task, task_queue_t *queue)
     ++queue->__size_of_free_nodes;
     if (task) {
         int y;
-        y = (task->type == MERGE) * (task->dim_x) + (task->type != MERGE) * (task->dim_y);
+        y = (task->type == MERGE) * (task->dim_x) +
+            (task->type != MERGE) * (task->dim_y);
         if (task->entries_out) {
             for (int i = 0; i < y; ++i)
                 free(task->entries_out[i]);

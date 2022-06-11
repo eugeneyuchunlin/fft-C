@@ -10,7 +10,7 @@
 
 int main()
 {
-    const int size = 7*11*17*30*30;
+    const int size = 7 * 11 * 17 * 30 * 30;
 
     //     fft_task_queue_t queue;
     //     INIT_LIST_HEAD(&queue.list);
@@ -34,6 +34,9 @@ int main()
         (complex double *) malloc(sizeof(complex double) * size);
     complex double *out_legacy =
         (complex double *) malloc(sizeof(complex double) * size);
+    complex double *ifft_out =
+        (complex double *) malloc(sizeof(complex double) * size);
+
 
     array[0] = 1;
     for (int i = 0; i < size; ++i) {
@@ -48,9 +51,16 @@ int main()
     FFT(array, out_legacy, size);
     t2 = clock();
     printf("Recursive : T2 - T2 = %.7f\n", (double) (t2 - t1) / CLOCKS_PER_SEC);
+    t1 = clock();
+    IFFT(out_legacy, ifft_out, size);
+    t2 = clock();
+    printf("IFFT Recursive : T2 - T2 = %.7f\n",
+           (double) (t2 - t1) / CLOCKS_PER_SEC);
     for (int i = 0; i < size; ++i) {
         assert(fabs(creal(out[i]) - creal(out_legacy[i])) < 0.001);
         assert(fabs(cimag(out[i]) - cimag(out_legacy[i])) < 0.001);
+        assert(fabs(creal(ifft_out[i]) - creal(array[i])) < 0.001);
+        assert(fabs(cimag(ifft_out[i])) < 0.001);
     }
     // for (int i = 0; i < size; ++i) {
     //     printf("%.3f %s %.3fi\n", creal(out[i]), cimag(out[i]) > 0 ? "+" :
@@ -60,4 +70,5 @@ int main()
     free(array);
     free(out);
     free(out_legacy);
+    free(ifft_out);
 }
