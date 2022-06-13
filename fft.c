@@ -280,6 +280,10 @@ typedef void (*mat_mult_func_t)(complex double *,
 
 typedef complex double (*omega_with_2pi_div_n_func_t)(int, double);
 
+
+void *cross(void *thread_data);
+void *merge(void *thread_data);
+void *divide(void *thread_data);
 void init_fft_task(complex double in[],
                    complex double out[],
                    int size,
@@ -291,7 +295,11 @@ void init_fft_task(complex double in[],
                          .type = DIVIDE,
                          .entries_out = NULL,
                          .dim_x = 0,
-                         .dim_y = 0};
+                         .dim_y = 0,
+                         .children_cnt = 0,
+                         .finished_children_acnt = 0,
+                         .parent_finished_acnt = NULL,
+                         .func = divide};
 }
 
 int determine_p(int size)
@@ -310,6 +318,219 @@ int determine_p(int size)
         }
     }
     return p;
+}
+
+
+pthread_mutex_t merge_print = PTHREAD_MUTEX_INITIALIZER;
+void *cross(void *thread_data);
+void *merge(void *thread_data);
+void *divide(void *thread_data)
+{
+    // TODO:
+    //  1. Perform native FFT for data count is 2, 3 or 5.
+    //  2. Divide data
+    //  3. add task into the queue
+    //      3-1. the task's worker function should be divide itself
+    //      3-2. the original task will reentrant the queue with worker function
+    //           cross.
+
+    thread_data_t *data = (thread_data_t *) thread_data;
+    task_queue_t *queue = data->queue;
+    fft_task_t *task, *nt;
+    task = data->task;
+    int p;
+
+    // Perfom 1st, native FFT
+    // FIXME:
+    // 1. Should replace native FFT function with the functions delcared in
+    // queue
+    // 2. Recycle the task
+    bool runned_native = false;
+    // printf("Size = %d\n", task->size);
+    if (task->size == 1) {
+        FFT1(task->in, task->out);
+        runned_native = true;
+    } else if (task->size == 2) {
+        FFT2(task->in, task->out);
+        runned_native = true;
+    } else if (task->size == 3) {
+        FFT3(task->in, task->out);
+        runned_native = true;
+    } else if (task->size == 5) {
+        FFT5(task->in, task->out);
+        runned_native = true;
+    } else {
+        p = determine_p(task->size);
+        if (p == task->size) {
+            for (int i = 0; i < task->size; ++i) {
+                complex double sum = 0;
+                for (int j = 0; j < task->size; ++j) {
+                    sum += task->in[j] *
+                           queue->omegas[task->size][(i * j) % task->size];
+                }
+                task->out[i] = sum;
+            }
+            runned_native = true;
+        }
+    }
+
+    if (runned_native) {
+        // pthread_mutex_lock(&merge_print);
+        // printf("###############\n");
+        // printf("T Size = %d\n", task->size);
+        // for(int i = 0; i < task->size; ++i){
+        //     printf("%.3f %.3f\n", creal(task->in[i]), cimag(task->in[i]));
+        // }
+        // printf("Become\n");
+        // for(int i = 0; i < task->size; ++i){
+        //     printf("%.2f %.2f\n", creal(task->out[i]), cimag(task->out[i]));
+        // }
+        // printf("###############\n");
+        // pthread_mutex_unlock(&merge_print);
+
+        if (task->parent_finished_acnt)
+            ++*task->parent_finished_acnt;
+        else {
+            queue->flag = hard;
+            pthread_cond_broadcast(&queue->notify);
+        }
+        recycle_task(task, queue);
+        return NULL;
+    }
+
+    int new_size = task->size / p;
+    // initialize counter
+    task->finished_children_acnt = 0;
+    task->children_cnt = p;
+
+    complex double **entries_out =
+        (complex double **) calloc(p, sizeof(complex double *));
+    // printf("\tP = %d\n", p);
+    for (int i = 0; i < p; ++i) {
+        // divide
+        complex double *entries_in =
+            (complex double *) calloc(new_size, sizeof(complex double));
+        entries_out[i] =
+            (complex double *) calloc(new_size, sizeof(complex double));
+
+        // place data
+        for (int j = 0; j < new_size; ++j) {
+            entries_in[j] = task->in[j * p + i];
+        }
+
+        nt = get_free_task(queue);
+        init_fft_task(entries_in, entries_out[i], new_size, nt);
+        nt->parent_finished_acnt = &task->finished_children_acnt;
+        add_task(nt, queue);
+    }
+
+    // original task reentrant
+
+    task->func = cross;
+    task->entries_out = entries_out;
+    task->dim_y = p;
+    task->dim_x = new_size;
+    task->type = CROSS;
+    add_task(task, queue);
+
+    return NULL;
+}
+
+void *cross(void *thread_data)
+{
+    thread_data_t *data = (thread_data_t *) thread_data;
+    task_queue_t *queue = data->queue;
+    fft_task_t *t = data->task, *nt;
+
+    t->finished_children_acnt = 0;
+    t->children_cnt = t->dim_x;
+
+    complex double **out_temp = malloc(sizeof(complex double *) * t->dim_x);
+    for (int i = 0; i < t->dim_x; ++i) {
+        complex double *in_temp =
+            (complex double *) malloc(sizeof(complex double) * t->dim_y);
+        out_temp[i] = malloc(sizeof(complex double) * t->dim_y);
+        for (int j = 0; j < t->dim_y; ++j) {
+            in_temp[j] =
+                t->entries_out[j][i] * OMEGA(i * j, t->size);  // FIXME: OMEGA
+        }
+        // printf("t->size = %d\n", t->size);
+        nt = get_free_task(queue);
+        init_fft_task(in_temp, out_temp[i], t->dim_y, nt);
+        nt->parent_finished_acnt = &t->finished_children_acnt;
+        add_task(nt, queue);
+    }
+    // free the used entries
+    for (int i = 0; i < t->dim_y; ++i) {
+        free(t->entries_out[i]);
+    }
+    free(t->entries_out);
+    t->entries_out = out_temp;  // reset new entries
+
+    t->type = MERGE;
+    t->func = merge;
+    add_task(t, queue);  // reentrant
+    return NULL;
+}
+
+void *merge(void *thread_data)
+{
+    thread_data_t *data = (thread_data_t *) thread_data;
+    task_queue_t *queue = data->queue;
+    fft_task_t *t = data->task, *nt;
+
+    for (int i = 0; i < t->dim_x; ++i) {
+        for (int j = 0; j < t->dim_y; ++j) {
+            t->out[i + t->dim_x * j] = t->entries_out[i][j];
+        }
+    }
+    if (t->parent_finished_acnt) {
+        ++(*t->parent_finished_acnt);
+    } else {
+        queue->flag = hard;
+        // FIXME: Should use broadcast rather
+        pthread_cond_broadcast(&queue->notify);
+    }
+
+    return NULL;
+}
+
+void *worker(void *data)
+{
+    task_queue_t *queue = (task_queue_t *) data;
+    fft_task_t *task;
+    thread_data_t t = {NULL, queue};
+    unsigned long long int thread_id = pthread_self();
+    // printf("thread id [%llu] started\n", thread_id);
+    for (;;) {
+        pthread_mutex_lock(&queue->queue_lock);
+        while (!has_ready_task(queue) && queue->flag == started) {
+            // printf("thread id [%llu] sleeps\n", thread_id);
+            pthread_cond_wait(&queue->notify, &queue->queue_lock);
+        }
+
+        if (queue->flag == hard || (queue->flag == soft && queue->size == 0)) {
+            // printf("thread id [%llu] breaks\n", thread_id);
+
+            break;
+        }
+
+        // TODO:dequeue
+        // list_task(queue);
+        get_ready_task(&task, queue);
+        // printf("thread id [%llu] works\n", thread_id);
+        pthread_mutex_unlock(&queue->queue_lock);
+
+        t.task = task;
+        if (task->func) {  // FIXME: Refetching the task is inefficient
+            task->func(&t);
+            // TODO: recycle task
+        }
+    }
+    pthread_mutex_unlock(&queue->queue_lock);
+    pthread_cond_broadcast(&queue->notify);
+    pthread_exit(NULL);
+    return NULL;
 }
 
 void _FFT_iter(task_queue_t *queue, complex double const *const *omegas)
@@ -446,15 +667,29 @@ void FFT_iter(complex double in[], complex double out[], int size)
     complex double *_in =
         (complex double *) malloc(sizeof(complex double) * size);
     memcpy(_in, in, sizeof(complex double) * size);
+
     task_queue_t queue;
     init_task_queue(&queue);
+    queue.omegas = (complex double const *const *) omegas;
     premalloc_tasks(&queue, 10000);
 
     fft_task_t *t = get_free_task(&queue);
     init_fft_task(_in, out, size, t);
+    // add_task(t, &queue);
+
+    // _FFT_iter(&queue, (complex double const *const *) omegas);
+    // create some workers
+    queue.thread_count = 8;
+    queue.threads =
+        (pthread_t *) malloc(sizeof(pthread_t) * queue.thread_count);
+    for (int i = 0; i < queue.thread_count; ++i) {
+        pthread_create(&queue.threads[i], NULL, worker, (void *) &queue);
+    }
     add_task(t, &queue);
 
-    _FFT_iter(&queue, (complex double const *const *) omegas);
+    for (int i = 0; i < queue.thread_count; ++i) {
+        pthread_join(queue.threads[i], NULL);
+    }
     destroy_task_queue(&queue);
     for (int i = 0; i < 1000; ++i) {
         if (omegas[i] != NULL)

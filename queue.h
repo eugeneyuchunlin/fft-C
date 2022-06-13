@@ -23,4 +23,15 @@ static inline void dequeue(struct list_head **node, struct list_head *head)
     list_del(*node);
 }
 
+static inline void dequeue_no_del(struct list_head **node,
+                                  struct list_head *head)
+{
+    if (list_empty(head)) {
+        *node = NULL;
+        return;
+    }
+
+    *node = head->next;
+}
+
 #endif

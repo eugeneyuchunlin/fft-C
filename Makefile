@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -Ofast -Wall
+CFLAGS := -Ofast -pthread -Wall
 
 
 all : example verify
@@ -16,6 +16,9 @@ endif
 
 example : example.o fft.o
 	$(CC) example.o fft.o -o example $(CFLAGS)
+
+fast_mul: fast_mult.o fft.o
+	$(CC) fast_mult.o fft.o -o fast_mul $(CFLAGS)
 
 verify: fft.o verify.o 
 	$(CC) fft.o verify.o -o verify $(CFLAGS) 
