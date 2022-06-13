@@ -321,7 +321,6 @@ int determine_p(int size)
 }
 
 
-pthread_mutex_t merge_print = PTHREAD_MUTEX_INITIALIZER;
 void *cross(void *thread_data);
 void *merge(void *thread_data);
 void *divide(void *thread_data)
@@ -488,7 +487,7 @@ void *worker(void *data)
     task_queue_t *queue = (task_queue_t *) data;
     fft_task_t *task;
     thread_data_t t = {NULL, queue};
-    unsigned long long int thread_id = pthread_self();
+    // unsigned long long int thread_id = pthread_self();
     // printf("thread id [%llu] started\n", thread_id);
     for (;;) {
         pthread_mutex_lock(&queue->queue_lock);
@@ -503,7 +502,6 @@ void *worker(void *data)
             break;
         }
 
-        // TODO:dequeue
         // list_task(queue);
         get_ready_task(&task, queue);
         // printf("thread id [%llu] works\n", thread_id);
@@ -621,11 +619,11 @@ void PFFT_iter(complex double in[],
 
 void FFT_iter(complex double in[], complex double out[], int size)
 {
-    PFFT_iter(in, out, size, 4);
+    PFFT_iter(in, out, size, 2);
 }
 void IFFT_iter(complex double in[], complex double out[], int size)
 {
-    PIFFT_iter(in, out, size, 4);
+    PIFFT_iter(in, out, size, 2);
 }
 
 
