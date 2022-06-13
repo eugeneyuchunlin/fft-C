@@ -35,6 +35,8 @@ typedef struct __task_t fft_task_t;
 
 
 enum POOL_TYPE { started = 0, shutdown = 1, soft = 2, hard = 3 };
+typedef void (*fft_native_func_t)(complex double *, complex double *);
+typedef complex double (*omega_with_2pi_div_n_func_t)(int, double);
 struct __task_queue_t {
     struct list_head list;
     struct list_head _free_nodes;
@@ -46,6 +48,8 @@ struct __task_queue_t {
 
     // TODO: functions:
     // be like FFT1, IFFT1
+    fft_native_func_t functions[3];
+    omega_with_2pi_div_n_func_t omega_func;
 
     // mutexes
     pthread_mutex_t queue_lock;
@@ -113,6 +117,7 @@ static inline void destroy_task_queue(task_queue_t *queue)
         sg = list_entry(node, mem_seg_t, node);
         free(sg);
     }
+    free(queue->threads);
 }
 
 static inline fft_task_t *get_free_task(task_queue_t *queue)

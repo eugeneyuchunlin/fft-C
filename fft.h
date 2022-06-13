@@ -22,8 +22,16 @@ void init_fft_task(complex double in[],
                    fft_task_t *task);
 
 
-
+void PIFFT_iter(complex double in[],
+                complex double out[],
+                int size,
+                int thread_cnt);
+void PFFT_iter(complex double in[],
+               complex double out[],
+               int size,
+               int thread_cnt);
 void FFT_iter(complex double in[], complex double out[], int size);
+void IFFT_iter(complex double in[], complex double out[], int size);
 
 void FFT2N(complex double in[], complex double out[], int size);
 /**

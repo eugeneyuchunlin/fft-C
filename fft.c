@@ -348,16 +348,16 @@ void *divide(void *thread_data)
     bool runned_native = false;
     // printf("Size = %d\n", task->size);
     if (task->size == 1) {
-        FFT1(task->in, task->out);
+        task->out[0] = task->in[0];
         runned_native = true;
     } else if (task->size == 2) {
-        FFT2(task->in, task->out);
+        queue->functions[0](task->in, task->out);
         runned_native = true;
     } else if (task->size == 3) {
-        FFT3(task->in, task->out);
+        queue->functions[1](task->in, task->out);
         runned_native = true;
     } else if (task->size == 5) {
-        FFT5(task->in, task->out);
+        queue->functions[2](task->in, task->out);
         runned_native = true;
     } else {
         p = determine_p(task->size);
@@ -375,19 +375,6 @@ void *divide(void *thread_data)
     }
 
     if (runned_native) {
-        // pthread_mutex_lock(&merge_print);
-        // printf("###############\n");
-        // printf("T Size = %d\n", task->size);
-        // for(int i = 0; i < task->size; ++i){
-        //     printf("%.3f %.3f\n", creal(task->in[i]), cimag(task->in[i]));
-        // }
-        // printf("Become\n");
-        // for(int i = 0; i < task->size; ++i){
-        //     printf("%.2f %.2f\n", creal(task->out[i]), cimag(task->out[i]));
-        // }
-        // printf("###############\n");
-        // pthread_mutex_unlock(&merge_print);
-
         if (task->parent_finished_acnt)
             ++*task->parent_finished_acnt;
         else {
@@ -405,7 +392,6 @@ void *divide(void *thread_data)
 
     complex double **entries_out =
         (complex double **) calloc(p, sizeof(complex double *));
-    // printf("\tP = %d\n", p);
     for (int i = 0; i < p; ++i) {
         // divide
         complex double *entries_in =
@@ -425,7 +411,6 @@ void *divide(void *thread_data)
     }
 
     // original task reentrant
-
     task->func = cross;
     task->entries_out = entries_out;
     task->dim_y = p;
@@ -446,13 +431,17 @@ void *cross(void *thread_data)
     t->children_cnt = t->dim_x;
 
     complex double **out_temp = malloc(sizeof(complex double *) * t->dim_x);
+
+    double m_pi_mul_2_sz = M_PI_MUL_2 / t->size;
     for (int i = 0; i < t->dim_x; ++i) {
         complex double *in_temp =
             (complex double *) malloc(sizeof(complex double) * t->dim_y);
         out_temp[i] = malloc(sizeof(complex double) * t->dim_y);
+
+
         for (int j = 0; j < t->dim_y; ++j) {
             in_temp[j] =
-                t->entries_out[j][i] * OMEGA(i * j, t->size);  // FIXME: OMEGA
+                t->entries_out[j][i] * queue->omega_func(i * j, m_pi_mul_2_sz);
         }
         // printf("t->size = %d\n", t->size);
         nt = get_free_task(queue);
@@ -488,7 +477,6 @@ void *merge(void *thread_data)
         ++(*t->parent_finished_acnt);
     } else {
         queue->flag = hard;
-        // FIXME: Should use broadcast rather
         pthread_cond_broadcast(&queue->notify);
     }
 
@@ -522,9 +510,8 @@ void *worker(void *data)
         pthread_mutex_unlock(&queue->queue_lock);
 
         t.task = task;
-        if (task->func) {  // FIXME: Refetching the task is inefficient
+        if (task->func) {
             task->func(&t);
-            // TODO: recycle task
         }
     }
     pthread_mutex_unlock(&queue->queue_lock);
@@ -533,113 +520,13 @@ void *worker(void *data)
     return NULL;
 }
 
-void _FFT_iter(task_queue_t *queue, complex double const *const *omegas)
-{
-    int p = 2;
-    fft_task_t *nt, *t;
-    while (queue->size > 0) {
-        // pop node
-        pop_task(&t, queue);
-        if (t->size == 1) {
-            __FFT1_MAT_MUL(t->in, t->out, NULL, 0);
-            recycle_task(t, queue);
-            continue;
-        } else if (t->size == 2) {
-            __FFT2_MAT_MUL(t->in, t->out, NULL, 0);
-            recycle_task(t, queue);
-            continue;
-        } else if (t->size == 3) {
-            __FFT3_MAT_MUL(t->in, t->out, NULL, 0);
-            recycle_task(t, queue);
-            continue;
-        } else if (t->size == 5) {
-            __FFT5_MAT_MUL(t->in, t->out, NULL, 0);
-            recycle_task(t, queue);
-            continue;
-        } else {
-            p = determine_p(t->size);
-            if (p == t->size) {
-                for (int i = 0; i < t->size; ++i) {
-                    complex double sum = 0;
-                    for (int j = 0; j < t->size; ++j) {
-                        sum += t->in[j] * omegas[t->size][(i * j) % t->size];
-                    }
-                    t->out[i] = sum;
-                }
 
-                recycle_task(t, queue);
-                continue;
-            }
-        }
-        if (t->type == DIVIDE) {
-            int new_size = t->size / p;
-            // reentrant
-            add_task(t, queue);
-            t->type = CROSS;
-            complex double **entries_out =
-                (complex double **) malloc(sizeof(complex double *) * p);
-            for (int i = 0; i < p; ++i) {
-                // divide
-                complex double *entries_in = (complex double *) malloc(
-                    sizeof(complex double) * new_size);
-                entries_out[i] = (complex double *) malloc(
-                    sizeof(complex double) * new_size);
 
-                // place data
-                for (int j = 0; j < new_size; ++j) {
-                    entries_in[j] = t->in[j * p + i];
-                }
-
-                // nt = malloc(sizeof(fft_task_t));
-                nt = get_free_task(queue);
-                init_fft_task(entries_in, entries_out[i], new_size, nt);
-                add_task(nt, queue);
-            }
-            t->entries_out = entries_out;
-            t->dim_y = p;
-            t->dim_x = new_size;
-            // printf("[DIVIDE]List task : \n");
-            // list_task(&queue);
-            // printf("");
-        } else if (t->type == CROSS) {  // type is CROSS
-            complex double **out_temp =
-                malloc(sizeof(complex double *) * t->dim_x);
-            add_task(t, queue);
-            for (int i = 0; i < t->dim_x; ++i) {
-                complex double *in_temp = (complex double *) malloc(
-                    sizeof(complex double) * t->dim_y);
-                out_temp[i] = malloc(sizeof(complex double) * t->dim_y);
-                for (int j = 0; j < t->dim_y; ++j) {
-                    in_temp[j] = t->entries_out[j][i] * OMEGA(i * j, t->size);
-                }
-                // printf("t->size = %d\n", t->size);
-                nt = get_free_task(queue);
-                init_fft_task(in_temp, out_temp[i], t->dim_y, nt);
-                add_task(nt, queue);
-            }
-            for (int i = 0; i < t->dim_y; ++i) {
-                free(t->entries_out[i]);
-            }
-            free(t->entries_out);
-            t->entries_out = out_temp;
-            t->type = MERGE;
-            // printf("[CROSS]List task : \n");
-            // list_task(&queue);
-            // printf("");
-        } else {  // MERGE
-            for (int i = 0; i < t->dim_x; ++i) {
-                for (int j = 0; j < t->dim_y; ++j) {
-                    t->out[i + t->dim_x * j] = t->entries_out[i][j];
-                }
-                // free(t->entries_out[i]);
-            }
-            // free(t->entries_out);
-            recycle_task(t, queue);
-        }
-    }
-}
-
-void FFT_iter(complex double in[], complex double out[], int size)
+void _FFT_iter(complex double in[],
+               complex double out[],
+               int size,
+               int thread_cnt,
+               int inverse)
 {
     int p = 2;
     complex double **omegas =
@@ -653,11 +540,16 @@ void FFT_iter(complex double in[], complex double out[], int size)
                 omegas[p] =
                     (complex double *) malloc(sizeof(complex double) * (p + 1));
                 int half_p = p >> 1;
+                // TODO: exp
+                int _exp_conj = inverse * (-1) + !inverse;
+                double __one_over_p = (inverse * (1.0 / p) + !inverse);
                 for (int i = 0; i <= half_p; ++i) {
-                    omegas[p][i] = OMEGA_WITH_DEG(i * M_PI_MUL_2 / p);
+                    omegas[p][i] =
+                        OMEGA_WITH_DEG(i * _exp_conj * M_PI_MUL_2 / p) *
+                        __one_over_p;
                     omegas[p][p - i] = conj(omegas[p][i]);
                 }
-                omegas[p][0] = 1;
+                omegas[p][0] = __one_over_p;
             }
         } else {
             ++p;
@@ -678,8 +570,19 @@ void FFT_iter(complex double in[], complex double out[], int size)
     // add_task(t, &queue);
 
     // _FFT_iter(&queue, (complex double const *const *) omegas);
+    if (inverse) {
+        queue.functions[0] = IFFT2;
+        queue.functions[1] = IFFT3;
+        queue.functions[2] = IFFT5;
+        queue.omega_func = conj_omega_with_2pi_div_n;
+    } else {
+        queue.functions[0] = FFT2;
+        queue.functions[1] = FFT3;
+        queue.functions[2] = FFT5;
+        queue.omega_func = omega_with_2pi_div_n;
+    }
     // create some workers
-    queue.thread_count = 8;
+    queue.thread_count = thread_cnt;
     queue.threads =
         (pthread_t *) malloc(sizeof(pthread_t) * queue.thread_count);
     for (int i = 0; i < queue.thread_count; ++i) {
@@ -690,12 +593,39 @@ void FFT_iter(complex double in[], complex double out[], int size)
     for (int i = 0; i < queue.thread_count; ++i) {
         pthread_join(queue.threads[i], NULL);
     }
+
     destroy_task_queue(&queue);
     for (int i = 0; i < 1000; ++i) {
         if (omegas[i] != NULL)
             free(omegas[i]);
     }
     free(omegas);
+}
+
+void PIFFT_iter(complex double in[],
+                complex double out[],
+                int size,
+                int thread_cnt)
+{
+    _FFT_iter(in, out, size, thread_cnt, true);
+}
+
+void PFFT_iter(complex double in[],
+               complex double out[],
+               int size,
+               int thread_cnt)
+{
+    _FFT_iter(in, out, size, thread_cnt, false);
+}
+
+
+void FFT_iter(complex double in[], complex double out[], int size)
+{
+    PFFT_iter(in, out, size, 4);
+}
+void IFFT_iter(complex double in[], complex double out[], int size)
+{
+    PIFFT_iter(in, out, size, 4);
 }
 
 
