@@ -487,24 +487,18 @@ void *worker(void *data)
     task_queue_t *queue = (task_queue_t *) data;
     fft_task_t *task;
     thread_data_t t = {NULL, queue};
-    // unsigned long long int thread_id = pthread_self();
-    // printf("thread id [%llu] started\n", thread_id);
     for (;;) {
         pthread_mutex_lock(&queue->queue_lock);
         while (!has_ready_task(queue) && queue->flag == started) {
-            // printf("thread id [%llu] sleeps\n", thread_id);
             pthread_cond_wait(&queue->notify, &queue->queue_lock);
         }
 
         if (queue->flag == hard || (queue->flag == soft && queue->size == 0)) {
-            // printf("thread id [%llu] breaks\n", thread_id);
-
             break;
         }
 
         // list_task(queue);
         get_ready_task(&task, queue);
-        // printf("thread id [%llu] works\n", thread_id);
         pthread_mutex_unlock(&queue->queue_lock);
 
         t.task = task;
