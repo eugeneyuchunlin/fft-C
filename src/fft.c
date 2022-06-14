@@ -181,90 +181,23 @@ static inline complex double conj_omega_with_2pi_div_n(int ij, double cst)
             complex double in[],                                           \
             complex double out[])                                          \
                     _FFT##num##_CONTENT                                    \
-                                                                           \
-    static inline void _FFT##num(                                          \
-            complex double in[],                                           \
-            complex double out[], int dum)                                 \
-                    _FFT##num##_CONTENT                                    \
-                                                                           \
-    static inline void __FFT##num##_MAT_MUL(                               \
-                complex double in[],                                       \
-                complex double out[],                                      \
-                complex double const *const *dum_mat,                      \
-                int dum_size)                                              \
-                    _FFT##num##_CONTENT                                    
-
-#define DECLARE_IFFTX_FUNC(num)                                                    \
+                                                                           
+#define DECLARE_IFFTX_FUNC(num)                                            \
     static inline void IFFT##num(                                          \
             complex double in[],                                           \
             complex double out[])                                          \
                     _INV_FFT##num##_CONTENT                                \
                                                                            \
-    static inline void _IFFT##num(                                         \
-            complex double in[],                                           \
-            complex double out[], int dum)                                 \
-                    _INV_FFT##num##_CONTENT                                \
-                                                                           \
-    static inline void __IFFT##num##_MAT_MUL(                              \
-                complex double in[],                                       \
-                complex double out[],                                      \
-                complex double const *const *dum_mat,                      \
-                int dum_size)                                              \
-                    _INV_FFT##num##_CONTENT
 // clang-format on
 
-DECLARE_FFTX_FUNC(1)
 DECLARE_FFTX_FUNC(2)
 DECLARE_FFTX_FUNC(3)
 DECLARE_FFTX_FUNC(5)
 
-DECLARE_IFFTX_FUNC(1)
 DECLARE_IFFTX_FUNC(2)
 DECLARE_IFFTX_FUNC(3)
 DECLARE_IFFTX_FUNC(5)
 
-
-#define DETERMINE_FFT_MUL(num, func) \
-    do {                             \
-        switch ((num)) {             \
-        case 1:                      \
-            (func) = __FFT1_MAT_MUL; \
-            break;                   \
-        case 2:                      \
-            (func) = __FFT2_MAT_MUL; \
-            break;                   \
-        case 3:                      \
-            (func) = __FFT3_MAT_MUL; \
-            break;                   \
-        case 5:                      \
-            (func) = __FFT5_MAT_MUL; \
-            break;                   \
-        default:                     \
-            (func) = __FFT;          \
-            break;                   \
-        }                            \
-    } while (0)
-
-#define DETERMINE_IFFT_MUL(num, func) \
-    do {                              \
-        switch ((num)) {              \
-        case 1:                       \
-            (func) = __IFFT1_MAT_MUL; \
-            break;                    \
-        case 2:                       \
-            (func) = __IFFT2_MAT_MUL; \
-            break;                    \
-        case 3:                       \
-            (func) = __IFFT3_MAT_MUL; \
-            break;                    \
-        case 5:                       \
-            (func) = __IFFT5_MAT_MUL; \
-            break;                    \
-        default:                      \
-            (func) = __IFFT;          \
-            break;                    \
-        }                             \
-    } while (0)
 
 
 typedef void (*fft_native_func_t)(complex double *, complex double *);
@@ -465,7 +398,7 @@ void *merge(void *thread_data)
 {
     thread_data_t *data = (thread_data_t *) thread_data;
     task_queue_t *queue = data->queue;
-    fft_task_t *t = data->task, *nt;
+    fft_task_t *t = data->task;
 
     for (int i = 0; i < t->dim_x; ++i) {
         for (int j = 0; j < t->dim_y; ++j) {
