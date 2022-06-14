@@ -1,7 +1,8 @@
+include ../common.mk
+
 CFLAGS += -I../include
 OBJS = fft.o
 
-include ../common.mk
 
 all: $(OBJS)
 

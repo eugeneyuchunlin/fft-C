@@ -16,3 +16,13 @@ endif
 
 PASS_COLOR = \e[32;01m
 NO_COLOR = \e[0m
+
+
+CC := gcc
+CFLAGS := -Ofast -pthread -Wall
+LDFLAGS := -pthread
+
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S), Linux)
+	LDFLAGS += -lm
+endif
