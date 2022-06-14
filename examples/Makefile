@@ -1,5 +1,6 @@
 
 include ../common.mk
+
 CFLAGS += -I../include
 
 all: example fast_mul
@@ -14,5 +15,5 @@ example: example.o ../src/fft.o
 
 fast_mul: fast_mult.o ../src/fft.o
 	$(VECHO) "  LD\t$@\n"
-	$(Q)$(CC) $^ -o $@ $(CFLAGS)
+	$(Q)$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
 
