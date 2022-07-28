@@ -2,7 +2,7 @@
 Fast Fouier Transform in C
 
 This is introduction for the repository and I would like to describe what I have done for implementing fast fourier transform in C language. 
-This is the course work in **National Cheng Kung University**. The professor tought me all these magic is [ycshu](https://github.com/ycshu). Mathmetician is megician 
+This is the course work in **National Cheng Kung University**. The professor tought me all these magic is [ycshu](https://github.com/ycshu). mathematicians are like magicians. 
 
 I wrote two versions to implement fast fourier transform algorithm one is using recursive function call the other is using loop to iterate. 
 
